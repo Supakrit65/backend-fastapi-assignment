@@ -16,6 +16,8 @@ class Reservation(BaseModel):
     room_id: int
 
 
+DATETIME_STR_FORMAT = "%Y-%m-%d"
+
 client = MongoClient(f"{MONGO_DB_URL}:{MONGO_DB_PORT}")
 
 db = client[DATABASE_NAME]
@@ -23,6 +25,15 @@ db = client[DATABASE_NAME]
 collection = db[COLLECTION_NAME]
 
 app = FastAPI()
+
+
+def get_reservation_info(reservation: Reservation):
+    return {
+        "name": reservation.name,
+        "start_date": reservation.start_date.strftime(DATETIME_STR_FORMAT),
+        "end_date": reservation.end_date.strftime(DATETIME_STR_FORMAT),
+        "room_id": reservation.room_id,
+    }
 
 
 def room_avaliable(room_id: int, start_date: str, end_date: str):
@@ -72,12 +83,7 @@ def get_reservation_by_room(room_id: int):
 def reserve(reservation: Reservation):
     if reservation.end_date < reservation.start_date:
         raise HTTPException(400)
-    filter = {
-        "name": str(reservation.name),
-        "start_date": reservation.start_date.strftime("%Y-%m-%d"),
-        "end_date": reservation.end_date.strftime("%Y-%m-%d"),
-        "room_id": int(reservation.room_id),
-    }
+    filter = get_reservation_info(reservation=reservation)
     if filter["room_id"] not in range(1, 11):
         raise HTTPException(400)
     if room_avaliable(filter["room_id"], filter["start_date"], filter["end_date"]):
@@ -92,16 +98,11 @@ def update_reservation(
 ):
     if new_end_date < new_start_date:
         raise HTTPException(400)
-    filter = {
-        "name": str(reservation.name),
-        "start_date": reservation.start_date.strftime("%Y-%m-%d"),
-        "end_date": reservation.end_date.strftime("%Y-%m-%d"),
-        "room_id": int(reservation.room_id),
-    }
+    filter = get_reservation_info(reservation=reservation)
     update = {
         "$set": {
-            "start_date": new_start_date.strftime("%Y-%m-%d"),
-            "end_date": new_end_date.strftime("%Y-%m-%d"),
+            "start_date": new_start_date.strftime(DATETIME_STR_FORMAT),
+            "end_date": new_end_date.strftime(DATETIME_STR_FORMAT),
         }
     }
     if room_avaliable(
@@ -114,10 +115,4 @@ def update_reservation(
 
 @app.delete("/reservation/delete")
 def cancel_reservation(reservation: Reservation):
-    filter = {
-        "name": str(reservation.name),
-        "start_date": reservation.start_date.strftime("%Y-%m-%d"),
-        "end_date": reservation.end_date.strftime("%Y-%m-%d"),
-        "room_id": int(reservation.room_id),
-    }
-    collection.delete_one(filter=filter)
+    collection.delete_one(get_reservation_info(reservation))
